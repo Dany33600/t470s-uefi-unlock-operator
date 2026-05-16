@@ -169,6 +169,34 @@ TRANSLATIONS = {
         'err.detect_failed_title': 'Détection échouée',
         'err.driver_not_installed_warn': '⚠️ Driver libusb non installé — wizard Zadig ouvert',
         'err.aborted_by_user': "⏭ Annulation par l'utilisateur",
+        'err.ch341a_not_found': (
+            "CH341A introuvable ou driver libusb non configuré.\n"
+            "Vérifiez que le CH341A est branché en USB et que le "
+            "driver WinUSB a été installé via Zadig.\n\n"
+            "ch341prog output:\n{output}"
+        ),
+        'err.chip_not_detected': (
+            "Aucune puce SPI détectée.\n"
+            "Vérifiez l'orientation du clip SOIC-8 "
+            "(ligne rouge ↔ point sur la puce).\n\n"
+            "ch341prog output:\n{output}"
+        ),
+        'err.chip_partial_detect': (
+            "Puce détectée partiellement mais capacité illisible.\n"
+            "ch341prog output:\n{output}"
+        ),
+        'err.driver_not_configured': (
+            "Driver libusb non configuré.\n\n{output}"
+        ),
+        'err.read_chip_failed': (
+            "Lecture échouée (code {code}) :\n{output}"
+        ),
+        'err.read_no_file': "Lecture terminée mais fichier manquant.",
+        'err.write_chip_failed': (
+            "Écriture échouée (code {code}) :\n{output}"
+        ),
+        'err.source_not_found': "Fichier source introuvable : {path}",
+        'err.ref_not_found': "Fichier de référence introuvable : {path}",
         'err.verify_failed_patched': (
             "Vérification échouée : la puce ne contient pas exactement les "
             "mêmes données que le fichier patché.\n"
@@ -239,6 +267,58 @@ TRANSLATIONS = {
         'op.finished': 'Terminé',
         'op.verified': 'VERIFIED',
         'op.verification': 'Vérification',
+        # ═══ Wizard Zadig (driver libusb) ═════════════════════
+        'zadig.title': 'Configuration du driver CH341A',
+        'zadig.header': '🔌 Configuration du driver CH341A',
+        'zadig.subtitle': "Le driver libusb n'est pas installé sur ce CH341A",
+        'zadig.status_not_configured': '⏳ Driver non configuré',
+        'zadig.status_testing': '⚙ Test en cours...',
+        'zadig.status_ok': '✅ Driver opérationnel',
+        'zadig.status_fail': '❌ Test échoué',
+        'zadig.procedure_title': '📋 PROCÉDURE',
+        'zadig.procedure': (
+            "1. Cliquez sur « Lancer Zadig » ci-dessous\n"
+            "   → Windows demandera des droits administrateur, acceptez\n\n"
+            "2. Dans Zadig (qui s'ouvre) :\n\n"
+            "   a) Menu Options  →  cochez « List All Devices »\n\n"
+            "   b) Dans la liste déroulante du haut, sélectionnez :\n"
+            "      « USB-EPP/I2C... CH341A »  (VID:PID = 1A86:5512)\n\n"
+            "   c) À droite, dans la zone du driver, choisissez « WinUSB »\n"
+            "      (au lieu de CH341PAR)\n\n"
+            "   d) Cliquez sur « Replace Driver »\n"
+            "      → attendez le message de succès (~15 sec)\n\n"
+            "   e) Fermez Zadig (croix en haut à droite)\n\n"
+            "3. Cliquez sur « J'ai terminé » ci-dessous\n"
+            "   → l'application va re-tester la détection"
+        ),
+        'zadig.launch_btn': '🚀 Lancer Zadig (en admin)',
+        'zadig.done_btn': '✅ J\'ai terminé',
+        'zadig.cancel_btn': 'Annuler',
+        'zadig.retesting': 'Re-test de la détection en cours...',
+        'zadig.test_ok': 'Driver détecté et fonctionnel !',
+        'zadig.test_fail': "Le driver n'est toujours pas détecté.\nVérifiez les étapes ci-dessus et réessayez.",
+        'zadig.launch_failed_title': 'Lancement échoué',
+        'zadig.launch_failed': "Impossible de lancer Zadig en admin :\n{err}\n\nLancez tools/zadig.exe manuellement.",
+        'zadig.not_found_title': 'Zadig manquant',
+        'zadig.not_found': "zadig.exe est introuvable.\nAttendu : {path}\n\nRelancez l'installeur.",
+        
+        # ═══ Driver setup dans l'app principale ═══════════════
+        'driver.setup_required': (
+            "Configuration du driver requise.\n\n"
+            "Une fenêtre va s'ouvrir pour vous aider à configurer le driver "
+            "libusb via Zadig. Cette manipulation n'est à faire qu'UNE FOIS."
+        ),
+        'driver.configured_log': '✅ Driver libusb configuré avec succès',
+        'driver.configured_instructions': (
+            "Driver configuré. La détection va reprendre automatiquement."
+        ),
+        'driver.not_configured_log': '⚠️ Configuration du driver annulée ou échouée',
+        'driver.not_configured_instructions': (
+            "Driver pas encore configuré.\n\n"
+            "Vous pouvez réessayer en cliquant à nouveau sur "
+            "'Démarrer cette machine'.\n"
+            "Ou lancez manuellement tools/zadig.exe en admin."
+        ),
     },
     
     'en': {
@@ -389,6 +469,34 @@ TRANSLATIONS = {
         'err.detect_failed_title': 'Detection failed',
         'err.driver_not_installed_warn': '⚠️ libusb driver not installed — Zadig wizard opening',
         'err.aborted_by_user': '⏭ Cancelled by user',
+        'err.ch341a_not_found': (
+            "CH341A not found or libusb driver not configured.\n"
+            "Check that the CH341A is plugged in via USB and that "
+            "the WinUSB driver was installed via Zadig.\n\n"
+            "ch341prog output:\n{output}"
+        ),
+        'err.chip_not_detected': (
+            "No SPI chip detected.\n"
+            "Check the SOIC-8 clip orientation "
+            "(red wire ↔ dot on the chip).\n\n"
+            "ch341prog output:\n{output}"
+        ),
+        'err.chip_partial_detect': (
+            "Chip partially detected but capacity unreadable.\n"
+            "ch341prog output:\n{output}"
+        ),
+        'err.driver_not_configured': (
+            "libusb driver not configured.\n\n{output}"
+        ),
+        'err.read_chip_failed': (
+            "Read failed (code {code}):\n{output}"
+        ),
+        'err.read_no_file': "Read complete but file missing.",
+        'err.write_chip_failed': (
+            "Write failed (code {code}):\n{output}"
+        ),
+        'err.source_not_found': "Source file not found: {path}",
+        'err.ref_not_found': "Reference file not found: {path}",
         'err.verify_failed_patched': (
             "Verification failed: the chip does not contain exactly the same "
             "data as the patched file.\n"
@@ -459,6 +567,58 @@ TRANSLATIONS = {
         'op.finished': 'Done',
         'op.verified': 'VERIFIED',
         'op.verification': 'Verification',
+        
+        # ═══ Zadig wizard (libusb driver) ═════════════════════
+        'zadig.title': 'CH341A driver setup',
+        'zadig.header': '🔌 CH341A driver setup',
+        'zadig.subtitle': 'The libusb driver is not installed on this CH341A',
+        'zadig.status_not_configured': '⏳ Driver not configured',
+        'zadig.status_testing': '⚙ Testing...',
+        'zadig.status_ok': '✅ Driver operational',
+        'zadig.status_fail': '❌ Test failed',
+        'zadig.procedure_title': '📋 PROCEDURE',
+        'zadig.procedure': (
+            "1. Click 'Launch Zadig' below\n"
+            "   → Windows will ask for admin rights, accept\n\n"
+            "2. In Zadig (which opens):\n\n"
+            "   a) Options menu  →  check 'List All Devices'\n\n"
+            "   b) In the top dropdown, select:\n"
+            "      'USB-EPP/I2C... CH341A'  (VID:PID = 1A86:5512)\n\n"
+            "   c) On the right, in the driver area, choose 'WinUSB'\n"
+            "      (instead of CH341PAR)\n\n"
+            "   d) Click 'Replace Driver'\n"
+            "      → wait for the success message (~15 sec)\n\n"
+            "   e) Close Zadig (X in the top right)\n\n"
+            "3. Click 'I'm done' below\n"
+            "   → the app will re-test the detection"
+        ),
+        'zadig.launch_btn': '🚀 Launch Zadig (as admin)',
+        'zadig.done_btn': "✅ I'm done",
+        'zadig.cancel_btn': 'Cancel',
+        'zadig.retesting': 'Re-testing detection...',
+        'zadig.test_ok': 'Driver detected and working!',
+        'zadig.test_fail': "Driver still not detected.\nCheck the steps above and try again.",
+        'zadig.launch_failed_title': 'Launch failed',
+        'zadig.launch_failed': "Cannot launch Zadig as admin:\n{err}\n\nRun tools/zadig.exe manually.",
+        'zadig.not_found_title': 'Zadig missing',
+        'zadig.not_found': "zadig.exe not found.\nExpected: {path}\n\nRe-run the installer.",
+        
+        # ═══ Driver setup in main app ═════════════════════════
+        'driver.setup_required': (
+            "Driver setup required.\n\n"
+            "A window will open to help you configure the libusb driver "
+            "via Zadig. This is a ONE-TIME setup."
+        ),
+        'driver.configured_log': '✅ libusb driver configured successfully',
+        'driver.configured_instructions': (
+            "Driver configured. Detection will resume automatically."
+        ),
+        'driver.not_configured_log': '⚠️ Driver setup cancelled or failed',
+        'driver.not_configured_instructions': (
+            "Driver not yet configured.\n\n"
+            "You can retry by clicking 'Start this machine' again.\n"
+            "Or run tools/zadig.exe manually as admin."
+        ),
     },
 }
 

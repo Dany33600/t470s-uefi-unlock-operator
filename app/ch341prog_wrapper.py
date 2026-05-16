@@ -26,6 +26,13 @@ import threading
 from pathlib import Path
 from typing import Callable, Optional
 
+try:
+    from i18n import t
+except ImportError:
+    # Fallback si i18n n'est pas dispo (usage standalone)
+    def t(key, **kwargs):
+        return key.format(**kwargs) if kwargs else key
+
 
 class Ch341progError(Exception):
     pass
@@ -163,19 +170,13 @@ class Ch341progWrapper:
         # Cas 1 : driver pas installe
         if "couldn't open device" in output_lower or "couldn't initialise libusb" in output_lower:
             raise Ch341progDriverError(
-                "CH341A introuvable ou driver libusb non configure.\n"
-                "Verifie que le CH341A est branche en USB et que le driver "
-                "WinUSB a ete installe via Zadig.\n\n"
-                f"ch341prog output:\n{output[-500:]}"
+                t('err.ch341a_not_found', output=output[-500:])
             )
         
         # Cas 2 : puce non trouvee
         if 'chip not found' in output_lower or 'missed in ch341a' in output_lower:
             raise Ch341progNotFoundError(
-                "Aucune puce SPI detectee.\n"
-                "Verifie l'orientation du clip SOIC-8 "
-                "(ligne rouge ↔ point sur la puce).\n\n"
-                f"ch341prog output:\n{output[-500:]}"
+                t('err.chip_not_detected', output=output[-500:])
             )
         
         # Parse les infos chip
@@ -227,8 +228,7 @@ class Ch341progWrapper:
         if not result.get('size_kb'):
             # Fallback : detect_chip echoue
             raise Ch341progNotFoundError(
-                f"Puce detectee partiellement mais capacite illisible.\n"
-                f"ch341prog output:\n{output[-300:]}"
+                t('err.chip_partial_detect', output=output[-300:])
             )
         
         return result
@@ -242,20 +242,15 @@ class Ch341progWrapper:
         """
         Lit la puce SPI et sauvegarde dans output_path.
         
-        Args:
-            output_path: chemin du fichier .rom de destination
-            on_log: callback(line) pour les logs
-            on_progress: callback(percent, status) pour la barre de progression
-        
         ch341prog appelle on_progress reellement en temps reel grace au
-        fflush(stdout) apres chaque update. Pas de bufferisation comme flashrom.
+        fflush(stdout) apres chaque update.
         """
         cmd = [self.ch341prog_path, '-v', '-r', str(output_path)]
         
         def on_raw_progress(bytes_done, percent, elapsed, eta):
-            # Adapter au format (percent, status)
+            # Adapter au format (percent, status), localisé
             mb_done = bytes_done / (1024 * 1024)
-            status = f"Lecture : {mb_done:.1f} Mo  •  ETA : {eta}s"
+            status = t('workflow.read_status_mb', mb=mb_done, eta=eta)
             if on_progress:
                 on_progress(percent, status)
         
@@ -267,16 +262,14 @@ class Ch341progWrapper:
             output_lower = output.lower()
             if "couldn't open" in output_lower or "initialise libusb" in output_lower:
                 raise Ch341progDriverError(
-                    f"Driver libusb non configure.\n\n{output[-500:]}"
+                    t('err.driver_not_configured', output=output[-500:])
                 )
             raise Ch341progError(
-                f"Lecture echouee (code {returncode}) :\n{output[-500:]}"
+                t('err.read_chip_failed', code=returncode, output=output[-500:])
             )
         
         if not Path(output_path).exists():
-            raise Ch341progError(
-                "Lecture terminee mais fichier manquant."
-            )
+            raise Ch341progError(t('err.read_no_file'))
     
     def write(
         self,
@@ -291,13 +284,13 @@ class Ch341progWrapper:
         On fait un verify manuel apres pour la securite.
         """
         if not Path(input_path).exists():
-            raise Ch341progError(f"Fichier source introuvable : {input_path}")
+            raise Ch341progError(t('err.source_not_found', path=input_path))
         
         cmd = [self.ch341prog_path, '-v', '-w', str(input_path)]
         
         def on_raw_progress(bytes_done, percent, elapsed, eta):
             mb_done = bytes_done / (1024 * 1024)
-            status = f"Ecriture : {mb_done:.1f} Mo  •  ETA : {eta}s"
+            status = t('workflow.write_status_mb', mb=mb_done, eta=eta)
             if on_progress:
                 on_progress(percent, status)
         
@@ -307,7 +300,7 @@ class Ch341progWrapper:
         
         if returncode != 0:
             raise Ch341progError(
-                f"Ecriture echouee (code {returncode}) :\n{output[-500:]}"
+                t('err.write_chip_failed', code=returncode, output=output[-500:])
             )
     
     def verify(
@@ -318,11 +311,9 @@ class Ch341progWrapper:
     ) -> bool:
         """
         Lit la puce et compare au contenu de expected_path.
-        ch341prog n'a pas de mode 'verify' natif, donc on relit dans un
-        fichier temporaire et on compare.
         """
         if not Path(expected_path).exists():
-            raise Ch341progError(f"Fichier de reference introuvable : {expected_path}")
+            raise Ch341progError(t('err.ref_not_found', path=expected_path))
         
         import tempfile, os
         tmp = tempfile.NamedTemporaryFile(suffix='.rom', delete=False)

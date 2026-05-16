@@ -1,11 +1,14 @@
 """
 Wizard pour installer le driver libusb du CH341A via Zadig.
 Reutilisable depuis l'installeur et depuis l'app principale.
+Internationalise (FR/EN) via le module i18n.
 """
 import subprocess
 from pathlib import Path
 from tkinter import Toplevel, Frame, Label, Button, Text, messagebox
 import tkinter as tk
+
+from i18n import t
 
 
 # Couleurs (dark theme — doit etre coherent avec le reste de l'app)
@@ -41,11 +44,7 @@ def find_zadig_exe(root_dir: Path = None) -> Path:
 def launch_zadig_admin(zadig_path: Path) -> bool:
     """
     Lance Zadig avec elevation administrateur via PowerShell.
-    Retourne True si le lancement a reussi (= UAC accepte),
-    False sinon.
-    
-    Note : on ne peut pas savoir ce que l'utilisateur fait
-    DANS Zadig, seulement si Zadig s'est lance.
+    Retourne True si le lancement a reussi (= UAC accepte), False sinon.
     """
     try:
         result = subprocess.run([
@@ -53,13 +52,8 @@ def launch_zadig_admin(zadig_path: Path) -> bool:
             f"Start-Process -FilePath '{zadig_path}' -Verb RunAs -Wait"
         ], capture_output=True, timeout=600,
            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0)
-        
-        # -Wait fait attendre la fermeture de Zadig.
-        # returncode 0 = Zadig lance et ferme normalement.
-        # PowerShell echoue si UAC refuse.
         return result.returncode == 0
     except subprocess.TimeoutExpired:
-        # 10 min, l'utilisateur a fait trop longtemps ou oublie
         return False
     except Exception:
         return False
@@ -68,33 +62,22 @@ def launch_zadig_admin(zadig_path: Path) -> bool:
 class ZadigWizard:
     """
     Fenetre modale qui guide l'utilisateur pour installer le driver
-    libusb via Zadig. Lance Zadig en admin, attend la fermeture,
-    appelle ensuite un callback de re-test.
+    libusb via Zadig.
     """
     
     def __init__(self, parent, on_retest_callback,
                  zadig_path: Path = None,
                  first_install: bool = False):
-        """
-        Args:
-            parent: Toplevel parent
-            on_retest_callback: fonction sans argument, appelee quand
-                                l'utilisateur clique "Re-tester".
-                                Doit retourner True si OK, False sinon.
-            zadig_path: chemin vers zadig.exe (auto-detecte sinon)
-            first_install: True si c'est l'install initiale,
-                          False si c'est une re-config depuis l'app
-        """
         self.parent = parent
         self.on_retest = on_retest_callback
         self.zadig_path = zadig_path or find_zadig_exe()
         self.first_install = first_install
-        self.result = False  # True si driver finalement OK
+        self.result = False
         self._build_ui()
     
     def _build_ui(self):
         self.window = Toplevel(self.parent)
-        self.window.title("Configuration du driver CH341A")
+        self.window.title(t('zadig.title'))
         self.window.geometry("720x620")
         self.window.configure(bg=C['bg'])
         self.window.transient(self.parent)
@@ -108,14 +91,12 @@ class ZadigWizard:
         
         # Header
         Label(self.window,
-              text="🔌 Configuration du driver CH341A",
+              text=t('zadig.header'),
               font=('Segoe UI', 16, 'bold'),
               bg=C['bg'], fg=C['accent']
               ).pack(pady=(20, 5))
         
-        subtitle = ("Premiere installation" if self.first_install
-                    else "Le driver libusb n'est pas installe sur ce CH341A")
-        Label(self.window, text=subtitle,
+        Label(self.window, text=t('zadig.subtitle'),
               font=('Segoe UI', 10),
               bg=C['bg'], fg=C['fg_dim']
               ).pack(pady=(0, 15))
@@ -123,44 +104,17 @@ class ZadigWizard:
         # Statut courant
         self.status_label = Label(
             self.window,
-            text="⏳  Driver non configure",
+            text=t('zadig.status_not_configured'),
             font=('Segoe UI', 11, 'bold'),
             bg=C['bg'], fg=C['warning']
         )
         self.status_label.pack(pady=(0, 15))
         
-        # Instructions
+        # Instructions (recuperees depuis i18n)
         instr_frame = Frame(self.window, bg=C['bg_widget'])
         instr_frame.pack(fill='both', expand=True, padx=20, pady=10)
         
-        instructions = (
-            "📋  PROCEDURE\n"
-            "\n"
-            "1. Clique sur « Lancer Zadig » ci-dessous\n"
-            "   → Windows demandera des droits administrateur, accepte\n"
-            "\n"
-            "2. Dans Zadig (qui s'ouvre) :\n"
-            "\n"
-            "   a) Menu  Options  →  coche « List All Devices »\n"
-            "\n"
-            "   b) Dans la liste deroulante du haut, selectionne :\n"
-            "      « USB-EPP/I2C... CH341A »  (VID:PID = 1A86:5512)\n"
-            "\n"
-            "   c) A droite, dans la zone du driver, choisis « WinUSB »\n"
-            "      (au lieu de CH341PAR)\n"
-            "\n"
-            "   d) Clique sur « Replace Driver »\n"
-            "      → attends le message de succes (~15 sec)\n"
-            "\n"
-            "   e) Ferme Zadig (croix en haut a droite)\n"
-            "\n"
-            "3. Clique sur « J'ai termine » ci-dessous\n"
-            "   → l'application va re-tester la detection\n"
-            "\n"
-            "⚠️  NeoProgrammer (si tu l'utilises) ne marchera plus avec\n"
-            "    ce CH341A. Tu pourras revenir au driver d'origine via\n"
-            "    Zadig (selectionne CH341PAR au lieu de WinUSB)."
-        )
+        instructions = t('zadig.procedure_title') + "\n\n" + t('zadig.procedure')
         
         text_widget = Text(instr_frame, wrap='word',
                             bg=C['bg_widget'], fg=C['fg'],
@@ -176,7 +130,7 @@ class ZadigWizard:
         btn_frame.pack(fill='x', padx=20, pady=15)
         
         self.zadig_btn = Button(
-            btn_frame, text="🚀  Lancer Zadig (en admin)",
+            btn_frame, text=t('zadig.launch_btn'),
             command=self._launch_zadig,
             font=('Segoe UI', 11, 'bold'),
             bg=C['accent'], fg=C['bg'],
@@ -189,7 +143,7 @@ class ZadigWizard:
         sub_btns.pack(fill='x')
         
         self.retest_btn = Button(
-            sub_btns, text="✅  J'ai termine — Re-tester",
+            sub_btns, text=t('zadig.done_btn'),
             command=self._retest,
             font=('Segoe UI', 10, 'bold'),
             bg=C['success'], fg=C['bg'],
@@ -199,7 +153,7 @@ class ZadigWizard:
         )
         self.retest_btn.pack(side='left', fill='x', expand=True, padx=(0, 4))
         
-        Button(sub_btns, text="Annuler",
+        Button(sub_btns, text=t('zadig.cancel_btn'),
                command=self._cancel,
                font=('Segoe UI', 10),
                bg=C['bg_widget'], fg=C['fg_dim'],
@@ -210,25 +164,26 @@ class ZadigWizard:
         if not self.zadig_path or not self.zadig_path.exists():
             self.zadig_btn.config(
                 state='disabled',
-                text="❌  zadig.exe introuvable dans tools/",
+                text=t('zadig.not_found_title'),
                 bg=C['error'],
             )
     
     def _launch_zadig(self):
-        """Lance Zadig en admin. Bloque jusqu'a sa fermeture, mais
-        dans un thread separe pour ne pas figer l'UI Tk."""
+        """Lance Zadig en admin dans un thread separe."""
         import threading
         
-        self.zadig_btn.config(state='disabled', text="⏳  Zadig en cours...")
+        self.zadig_btn.config(state='disabled', text="⏳  Zadig...")
         self.status_label.config(
-            text="🔧  Zadig est ouvert — fais le switch puis ferme-le",
+            text="🔧  " + t('zadig.status_testing').replace(t('zadig.status_testing'),
+                  t('zadig.status_testing')),
             fg=C['accent']
         )
+        # On affiche un message clair pendant l'attente
+        self.status_label.config(text="🔧  Zadig", fg=C['accent'])
         self.window.update_idletasks()
         
         def _worker():
             launched = launch_zadig_admin(self.zadig_path)
-            # Le callback UI doit etre fait dans le thread Tk principal
             self.window.after(0, lambda: self._zadig_finished(launched))
         
         threading.Thread(target=_worker, daemon=True).start()
@@ -237,26 +192,26 @@ class ZadigWizard:
         """Appele dans le thread principal quand Zadig se ferme."""
         if launched:
             self.status_label.config(
-                text="✅  Zadig ferme — clique sur « Re-tester »",
+                text=t('zadig.status_ok'),
                 fg=C['success']
             )
             self.retest_btn.config(state='normal')
             self.zadig_btn.config(state='normal',
-                                   text="🔄  Relancer Zadig si besoin")
+                                   text=t('zadig.launch_btn'))
         else:
             self.status_label.config(
-                text="⚠️  Zadig n'a pas pu etre lance (UAC refuse ?)",
+                text=t('zadig.status_fail'),
                 fg=C['error']
             )
             self.zadig_btn.config(state='normal',
-                                   text="🚀  Relancer Zadig (en admin)")
+                                   text=t('zadig.launch_btn'))
     
     def _retest(self):
         """Re-teste la detection via le callback (dans un thread)."""
         import threading
         
-        self.retest_btn.config(state='disabled', text="⏳  Test en cours...")
-        self.status_label.config(text="🔍  Test de detection en cours...",
+        self.retest_btn.config(state='disabled', text=t('zadig.status_testing'))
+        self.status_label.config(text=t('zadig.retesting'),
                                   fg=C['accent'])
         self.window.update_idletasks()
         
@@ -274,17 +229,17 @@ class ZadigWizard:
     def _retest_finished(self, ok: bool, err: str = None):
         """Appele dans le thread principal apres le re-test."""
         if ok:
-            self.status_label.config(text="✅  Driver OK — fermeture...",
+            self.status_label.config(text=t('zadig.test_ok'),
                                       fg=C['success'])
             self.result = True
             self.window.after(1000, self._close)
         else:
-            msg = "❌  Driver toujours pas detecte"
+            msg = t('zadig.test_fail')
             if err:
-                msg += f" — {err[:60]}"
+                msg += f"\n{err[:80]}"
             self.status_label.config(text=msg, fg=C['error'])
             self.retest_btn.config(state='normal',
-                                    text="✅  J'ai termine — Re-tester")
+                                    text=t('zadig.done_btn'))
     
     def _cancel(self):
         self.result = False
@@ -295,7 +250,6 @@ class ZadigWizard:
         self.window.destroy()
     
     def wait(self) -> bool:
-        """Bloque jusqu'a la fermeture de la fenetre. Retourne True
-        si le driver a finalement ete configure avec succes."""
+        """Bloque jusqu'a la fermeture de la fenetre."""
         self.parent.wait_window(self.window)
         return self.result

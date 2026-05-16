@@ -18,6 +18,7 @@ cd /d "%~dp0"
 set "ROOT=%cd%"
 set "PYTHON_VERSION=3.11.9"
 set "PYTHON_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/python-%PYTHON_VERSION%-amd64.exe"
+set "PYTHON_RETRY_COUNT=0"
 
 REM ─── Banniere ─────────────────────────────────────────────────
 echo.
@@ -54,8 +55,57 @@ if not errorlevel 1 (
     )
 )
 
+REM ─── Fallback : chercher Python aux emplacements typiques ─────
+REM Apres une install fraiche, le PATH du process actuel n'est pas
+REM forcement a jour. On cherche python.exe aux emplacements standard
+REM d'installation Windows (per-user et system-wide).
+for %%P in (
+    "%LocalAppData%\Programs\Python\Python313\python.exe"
+    "%LocalAppData%\Programs\Python\Python312\python.exe"
+    "%LocalAppData%\Programs\Python\Python311\python.exe"
+    "%LocalAppData%\Programs\Python\Python310\python.exe"
+    "%LocalAppData%\Programs\Python\Python39\python.exe"
+    "C:\Program Files\Python313\python.exe"
+    "C:\Program Files\Python312\python.exe"
+    "C:\Program Files\Python311\python.exe"
+    "C:\Program Files\Python310\python.exe"
+    "C:\Program Files\Python39\python.exe"
+    "C:\Python313\python.exe"
+    "C:\Python312\python.exe"
+    "C:\Python311\python.exe"
+    "C:\Python310\python.exe"
+    "C:\Python39\python.exe"
+) do (
+    if exist "%%~P" (
+        "%%~P" -c "import sys, tkinter; assert sys.version_info[0] >= 3" >nul 2>nul
+        if not errorlevel 1 (
+            set PYTHON_EXE="%%~P"
+            for /f "tokens=*" %%V in ('"%%~P" --version 2^>^&1') do echo       %%V detecte / detected ^(avec tkinter / with tkinter^)
+            echo       Chemin / Path: %%~P
+            goto :python_ok
+        )
+    )
+)
+
 REM ─── Python absent ou sans tkinter : on telecharge l'installeur
 echo       Python non detecte ^(ou sans tkinter^)  /  not detected ^(or without tkinter^).
+
+REM Compteur de retry : on n'essaye que 3 fois max pour ne pas boucler infiniment
+set /a PYTHON_RETRY_COUNT+=1
+if !PYTHON_RETRY_COUNT! GTR 3 (
+    echo.
+    echo  [FR] [ERREUR] Python n'a pas pu etre installe apres 3 tentatives.
+    echo       Installez Python manuellement depuis : https://www.python.org/downloads/
+    echo       Important : cochez "Add python.exe to PATH" pendant l'install.
+    echo       Puis relancez ce script.
+    echo.
+    echo  [EN] [ERROR] Python could not be installed after 3 attempts.
+    echo       Install Python manually from: https://www.python.org/downloads/
+    echo       Important: check "Add python.exe to PATH" during install.
+    echo       Then re-run this script.
+    pause
+    exit /b 1
+)
 echo.
 echo  ============================================================
 echo    Installation de Python requise
@@ -140,11 +190,33 @@ echo  [FR] Installation terminee. Re-verification...
 echo  [EN] Installation done. Re-checking...
 echo.
 
-REM Recharger les variables d'environnement pour voir le nouveau PATH
-REM (l'installeur Python a peut-etre ajoute python au PATH)
-for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v PATH 2^>nul ^| findstr /i "PATH"') do set "USER_PATH=%%B"
-for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v PATH 2^>nul ^| findstr /i "PATH"') do set "SYS_PATH=%%B"
-set "PATH=%SYS_PATH%;%USER_PATH%"
+REM ─── Rechargement du PATH apres installation Python ───────────
+REM ATTENTION : on doit preserver le PATH systeme essentiel (System32)
+REM sinon on perd powershell.exe, reg.exe, where.exe, etc.
+REM
+REM Strategie :
+REM   1. Memoriser un PATH minimal sur (System32) au cas ou
+REM   2. Lire HKLM (PATH systeme) et HKCU (PATH utilisateur) depuis
+REM      le registre
+REM   3. Construire le nouveau PATH : SystemRoot d'abord, puis HKLM,
+REM      puis HKCU
+set "SAFE_PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0"
+
+set "USER_PATH="
+set "SYS_PATH="
+
+for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v PATH 2^>nul ^| findstr /i "REG_"') do set "USER_PATH=%%B"
+for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v PATH 2^>nul ^| findstr /i "REG_"') do set "SYS_PATH=%%B"
+
+REM Si la lecture du registre echoue, on garde au moins le SAFE_PATH
+if defined SYS_PATH (
+    set "PATH=%SYS_PATH%;%USER_PATH%;%SAFE_PATH%"
+) else (
+    set "PATH=%SAFE_PATH%;%USER_PATH%"
+)
+
+REM Petite attente pour laisser le PATH se propager
+timeout /t 2 /nobreak >nul 2>nul
 
 echo  ------------------------------------------------------------
 echo   Appuyez sur une touche pour continuer  /  Press any key to continue

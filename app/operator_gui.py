@@ -117,9 +117,9 @@ class OperatorApp:
         self.machine_data = {}
         
         self._build_ui()
-        self._log("✨ Session démarrée. CSV : " + self.csv_path)
+        self._log(t('app.session_started', path=self.csv_path))
         if self._log_fh:
-            self._log(f"📝 Log fichier : {self.log_file_path}")
+            self._log(t('app.log_file', path=self.log_file_path))
         self._reset_machine()
     
     def _build_ui(self):
@@ -699,11 +699,7 @@ class OperatorApp:
     def _show_zadig_wizard_inline(self):
         """Ouvre le wizard Zadig depuis l'app principale (pas l'installeur).
         Une fois ferme avec succes, relance automatiquement la detection."""
-        self._set_instructions(
-            "Configuration du driver requise.\n\n"
-            "Une fenetre va s'ouvrir pour t'aider a configurer le driver "
-            "libusb via Zadig. Cette manipulation n'est a faire qu'UNE FOIS."
-        )
+        self._set_instructions(t('driver.setup_required'))
         
         def retest_callback():
             """Callback appele quand l'utilisateur clique 'Re-tester' dans le wizard."""
@@ -723,20 +719,14 @@ class OperatorApp:
         success = wizard.wait()
         
         if success:
-            self._log("✅ Driver libusb configuré avec succès", 'success')
-            self._set_instructions(
-                "Driver configuré. La détection va reprendre automatiquement."
-            )
+            self._log(t('driver.configured_log'), 'success')
+            self._set_instructions(t('driver.configured_instructions'))
             # On relance la step 1 (qui va maintenant fonctionner)
             self.current_step = 0
             self.root.after(500, self.action_main)
         else:
-            self._log("⚠️ Configuration du driver annulée ou échouée", 'warning')
-            self._set_instructions(
-                "Driver pas encore configuré.\n\n"
-                "Tu peux retenter en cliquant à nouveau sur 'Démarrer cette machine'.\n"
-                "Ou lance manuellement tools/zadig.exe en admin."
-            )
+            self._log(t('driver.not_configured_log'), 'warning')
+            self._set_instructions(t('driver.not_configured_instructions'))
             self.action_btn.config(state='normal')
     
     # ════ STEP 2 ════════════════════════════════════════════════
@@ -1089,7 +1079,7 @@ class OperatorApp:
             Statut='ABORTED',
             Notes=f"aborted at step {self.current_step}",
         )
-        self._log(f"⏭ Machine passée (step {self.current_step})", 'warning')
+        self._log(t('session.skipped_log', step=self.current_step), 'warning')
         self._update_session_info()
         self._reset_machine()
     
