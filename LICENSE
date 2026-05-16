@@ -1,0 +1,81 @@
+MIT License
+
+Copyright (c) 2026 Dany (Dany33600)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+═══════════════════════════════════════════════════════════════════════════════
+THIRD-PARTY COMPONENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+This project bundles or depends on third-party software with their own
+licenses. Each component remains under its own license, not the MIT one
+above.
+
+  - flashrom 1.4
+      Downloaded at install time from:
+        https://github.com/therealdreg/flashrom_build_windows_x64
+      License: GPL-2.0
+      Used for: SPI chip detection on Windows with CH341A programmer.
+
+  - ch341prog (patched build embedded in resources/ch341prog/)
+      Source: ch341prog-master 25xx (originally by setarcos, patched here
+      to add Windows support — SetConsoleCtrlHandler instead of sigaction,
+      skip libusb_detach_kernel_driver on Windows).
+      License: GPL-3.0 (per original source)
+      Used for: chip read/write with real-time progress on Windows.
+
+  - libusb-1.0
+      Bundled DLL distributed with ch341prog.exe.
+      License: LGPL-2.1
+      Source: https://github.com/libusb/libusb
+
+  - Zadig 2.9
+      Downloaded at install time from:
+        https://github.com/pbatard/libwdi/releases
+      License: GPL-3.0
+      Used for: installing the WinUSB driver for the CH341A programmer.
+
+  - Lenovo Autopatcher 0.2 (by Knucklegrumble, originally posted on
+    badcaps.net)
+      Embedded as resources/lenovo_autopatcher_0.2.zip.
+      License: not formally stated by the author. Redistribution here is
+      intended as fair use of an existing community tool for refurbishment
+      and self-repair purposes.
+      Used for: patching the UEFI firmware to neutralize the supervisor
+      password.
+
+  - The unlock workflow itself is derived from the tutorial by Liliana
+    (lilianalillyy) hosted at:
+        https://github.com/lilianalillyy/t470s-uefi-unlock
+    Their work and acknowledgements to Knucklegrumble are gratefully
+    credited.
+
+═══════════════════════════════════════════════════════════════════════════════
+DISCLAIMER
+═══════════════════════════════════════════════════════════════════════════════
+
+This software flashes the SPI EEPROM of a laptop, an operation that can
+brick the device if performed incorrectly (wrong firmware written to the
+wrong machine, bad clip contact, interrupted write, etc.). The authors and
+contributors are not liable for any hardware damage, data loss, or any
+other consequence of using this software.
+
+You must own the device you are unlocking and use this tool only on
+hardware you have the legal right to modify.

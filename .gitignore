@@ -1,0 +1,34 @@
+# ────────────────────────────────────────────────────────────────
+# Dossiers generes au runtime (jamais commités)
+# ────────────────────────────────────────────────────────────────
+tools/
+lenovo_autopatcher/
+dumps/
+reports/
+logs/
+runtime/
+__pycache__/
+*.pyc
+*.pyo
+
+# Config locale (chemins absolus specifiques a la machine + langue)
+config.json
+.lang.tmp
+
+# Dumps SPI : NE JAMAIS commiter, contiennent SN / MAC / UUID uniques
+*.rom
+*.bin
+
+# Fichiers OS / editeurs
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+*.iml
+
+# Logs de session
+session_*.log
+session_*.csv
