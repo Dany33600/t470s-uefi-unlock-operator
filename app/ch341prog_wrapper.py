@@ -258,6 +258,26 @@ class Ch341progWrapper:
             cmd, on_log=on_log, on_progress=on_raw_progress
         )
         
+        # Detection des erreurs dans la sortie meme si returncode == 0
+        output_lower = output.lower()
+        read_error_signatures = [
+            'error while reading',
+            'failed to read',
+            "couldn't open",
+            'initialise libusb',
+        ]
+        for sig in read_error_signatures:
+            if sig in output_lower:
+                if "couldn't open" in sig or 'initialise libusb' in sig:
+                    raise Ch341progDriverError(
+                        t('err.driver_not_configured', output=output[-500:])
+                    )
+                raise Ch341progError(
+                    t('err.read_chip_failed',
+                      code=f"{returncode} (detected: '{sig}')",
+                      output=output[-600:])
+                )
+        
         if returncode != 0:
             output_lower = output.lower()
             if "couldn't open" in output_lower or "initialise libusb" in output_lower:
@@ -271,32 +291,181 @@ class Ch341progWrapper:
         if not Path(output_path).exists():
             raise Ch341progError(t('err.read_no_file'))
     
+    def erase(
+        self,
+        on_log: Optional[Callable] = None,
+        on_progress: Optional[Callable] = None,
+    ) -> None:
+        """
+        Efface integralement la puce SPI (met tous les bits a 1 = 0xFF).
+        
+        Indispensable AVANT toute ecriture, car les puces flash NOR/NAND
+        ne peuvent pas faire de transitions 0→1 sans erase prealable.
+        ch341prog ne fait PAS l'erase automatique avant un -w, contrairement
+        a NeoProgrammer ou flashrom.
+        
+        L'erase est rapide (~10-15s pour 16 Mo via la commande Chip Erase
+        de la puce), mais ch341prog poll le status register toutes les
+        secondes en affichant "." pour montrer l'avancee.
+        """
+        cmd = [self.ch341prog_path, '-v', '-e']
+        
+        # L'erase n'a pas de progression byte-par-byte, ch341prog affiche
+        # juste des "." pendant l'attente. On simule une progression
+        # indeterminee a base de timer.
+        import time, threading
+        
+        progress_state = {'percent': 0, 'running': True}
+        
+        def progress_ticker():
+            # Estimation : erase d'une puce 16 Mo prend ~15-20 sec
+            # On fait monter la barre lineairement sur 20 sec, sans
+            # depasser 95% tant que ch341prog n'a pas dit "Chip erase done".
+            start = time.time()
+            while progress_state['running']:
+                elapsed = time.time() - start
+                # Asymptote vers 95% en 20s
+                pct = min(95, int(elapsed * 95 / 20))
+                if pct != progress_state['percent']:
+                    progress_state['percent'] = pct
+                    if on_progress:
+                        try:
+                            status = t('workflow.erase_status', sec=int(elapsed))
+                            on_progress(pct, status)
+                        except Exception:
+                            pass
+                time.sleep(0.5)
+        
+        ticker_thread = threading.Thread(target=progress_ticker, daemon=True)
+        ticker_thread.start()
+        
+        try:
+            returncode, output = self._run_with_progress(
+                cmd, on_log=on_log, on_progress=None
+            )
+        finally:
+            progress_state['running'] = False
+            ticker_thread.join(timeout=1)
+        
+        # Verifier que l'erase a reussi
+        output_lower = output.lower()
+        
+        if "couldn't open" in output_lower or 'initialise libusb' in output_lower:
+            raise Ch341progDriverError(
+                t('err.driver_not_configured', output=output[-500:])
+            )
+        
+        if 'chip not found' in output_lower:
+            raise Ch341progNotFoundError(
+                t('err.chip_not_detected', output=output[-500:])
+            )
+        
+        if 'erase timeout' in output_lower or 'erase failed' in output_lower:
+            raise Ch341progError(
+                t('err.erase_failed', output=output[-500:])
+            )
+        
+        # On veut voir "Chip erase done!" pour etre sur
+        if 'chip erase done' not in output_lower:
+            raise Ch341progError(
+                t('err.erase_failed', output=output[-500:])
+            )
+        
+        if on_progress:
+            on_progress(100, t('workflow.erase_done_status'))
+    
     def write(
         self,
         input_path: str,
         on_log: Optional[Callable] = None,
         on_progress: Optional[Callable] = None,
+        skip_erase: bool = False,
     ) -> None:
         """
         Ecrit input_path sur la puce.
         
-        ch341prog effectue : erase puis write (pas de verify automatique).
-        On fait un verify manuel apres pour la securite.
+        IMPORTANT : ch341prog ne fait PAS d'erase automatique avant le
+        write. Il faut le faire explicitement, sinon les bits a 1 dans
+        l'ancien contenu qui doivent passer a 0 dans le nouveau echouent
+        (erase met tout a 0xFF, et le write ne peut que faire 1→0).
+        
+        Workflow :
+          1. erase (sauf si skip_erase=True)
+          2. write
+          3. ch341prog fait son verify natif et signale "Error while
+             writing" si ca foire — on detecte ce signal.
         """
         if not Path(input_path).exists():
             raise Ch341progError(t('err.source_not_found', path=input_path))
         
+        # ━━━ ETAPE 1/2 : ERASE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if not skip_erase:
+            if on_log:
+                on_log(t('workflow.erase_step_log'))
+            self.erase(on_log=on_log, on_progress=on_progress)
+        
+        # ━━━ ETAPE 2/2 : WRITE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if on_log:
+            on_log(t('workflow.write_step_log'))
+        
         cmd = [self.ch341prog_path, '-v', '-w', str(input_path)]
+        
+        # Etat partage entre les callbacks pour suivre la phase courante :
+        # 'write' (par defaut) ou 'verify' (apres "Write ok! Try to verify").
+        # ch341prog fait son verify natif juste apres le write, dans le meme
+        # process, et n'affiche pas de message distinct entre les deux. On
+        # detecte le passage en surveillant la ligne "Write ok!".
+        phase_state = {'phase': 'write'}
+        
+        def on_log_with_phase_detect(line):
+            line_lower = line.lower()
+            # Detection du passage write -> verify (phase native ch341prog).
+            # On le signale UNE seule fois (le premier match).
+            if phase_state['phase'] == 'write' and (
+                'write ok' in line_lower or 'try to verify' in line_lower
+            ):
+                phase_state['phase'] = 'verify'
+                if on_log:
+                    on_log(t('workflow.verify_native_log'))
+            # Forwarde la ligne brute au callback utilisateur
+            if on_log:
+                on_log(line)
         
         def on_raw_progress(bytes_done, percent, elapsed, eta):
             mb_done = bytes_done / (1024 * 1024)
-            status = t('workflow.write_status_mb', mb=mb_done, eta=eta)
+            # Le label depend de la phase courante
+            if phase_state['phase'] == 'verify':
+                status = t('workflow.verify_native_status', mb=mb_done, eta=eta)
+            else:
+                status = t('workflow.write_status_mb', mb=mb_done, eta=eta)
             if on_progress:
                 on_progress(percent, status)
         
         returncode, output = self._run_with_progress(
-            cmd, on_log=on_log, on_progress=on_raw_progress
+            cmd, on_log=on_log_with_phase_detect, on_progress=on_raw_progress
         )
+        
+        # Detection des erreurs dans la sortie meme si returncode == 0.
+        # ch341prog fait un verify natif APRES le write, et peut signaler
+        # "Error while writing" tout en se terminant avec un code 0.
+        output_lower = output.lower()
+        error_signatures = [
+            'error while writing',
+            'may be it need to be erased',
+            'failed to write',
+            'verification failed',
+            'verification error',
+            'write failed',
+            "couldn't open",
+            'initialise libusb',
+        ]
+        for sig in error_signatures:
+            if sig in output_lower:
+                raise Ch341progError(
+                    t('err.write_chip_failed',
+                      code=f"{returncode} (detected: '{sig}')",
+                      output=output[-600:])
+                )
         
         if returncode != 0:
             raise Ch341progError(

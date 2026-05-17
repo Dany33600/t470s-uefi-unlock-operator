@@ -121,6 +121,10 @@ class OperatorApp:
         if self._log_fh:
             self._log(t('app.log_file', path=self.log_file_path))
         self._reset_machine()
+        # Lance le poller qui rafraichit le panneau machine_info toutes
+        # les 2s. C'est un filet de securite pour les cas ou un update
+        # depuis un thread worker aurait ete ignore par Tk.
+        self.root.after(1000, self._start_machine_info_poller)
     
     def _build_ui(self):
         self.root.title(t('app.title'))
@@ -241,12 +245,16 @@ class OperatorApp:
               font=FONT_STEP, bg=C['bg_widget'], fg=C['success']
               ).pack(anchor='w', padx=10, pady=(8, 4))
         
+        # On utilise un Label avec wraplength pour s'assurer que le
+        # texte s'affiche sur plusieurs lignes correctement. Le
+        # justify='left' + anchor='w' aligne a gauche.
         self.machine_info = Label(
             info_frame, text=t('ui.machine_none'),
-            font=FONT_MONO, bg=C['bg_widget'], fg=C['fg_dim'],
-            justify='left', anchor='w'
+            font=FONT_MONO, bg=C['bg_widget'], fg=C['fg'],
+            justify='left', anchor='w',
+            wraplength=400,
         )
-        self.machine_info.pack(fill='x', padx=10, pady=(0, 10))
+        self.machine_info.pack(fill='x', padx=10, pady=(0, 10), anchor='w')
         
         # Buttons
         btn_frame = Frame(left, bg=C['bg_alt'])
@@ -605,10 +613,17 @@ class OperatorApp:
         return result['sn']
     
     def _update_machine_info(self):
+        """Met a jour le panneau 'Machine en cours' depuis self.machine_data.
+        
+        IMPORTANT : cette methode DOIT etre appelee via self.root.after(0, ...)
+        depuis les threads worker, jamais directement, sinon Tk peut ignorer
+        l'update silencieusement (selon les versions/platforms).
+        """
         m = self.machine_data
-        if not m or not m.get('start_time'):
+        if not m:
             self.machine_info.config(text=t('ui.machine_none'))
             return
+        
         lines = []
         if m.get('sn'):
             lines.append(f"{t('machine.sn'):<10}: {m['sn']}")
@@ -623,7 +638,28 @@ class OperatorApp:
             )
         if m.get('stock_md5'):
             lines.append(f"{t('machine.md5_stock'):<10}: {m['stock_md5'][:16]}...")
-        self.machine_info.config(text='\n'.join(lines) if lines else '(...)')
+        
+        # DEBUG : log dans le fichier seul (pas la console UI) pour diagnostic
+        try:
+            if self._log_fh:
+                self._log_fh.write(
+                    f"[DEBUG _update_machine_info] keys={list(m.keys())} "
+                    f"sn={m.get('sn')} chip={'yes' if m.get('chip') else 'no'} "
+                    f"start_time={m.get('start_time')} lines={len(lines)}\n"
+                )
+                self._log_fh.flush()
+        except Exception:
+            pass
+        
+        # Si on a au moins UNE info (chip, sn, etc), on affiche.
+        # Sinon, on affiche "(aucune machine commencée)".
+        if lines:
+            self.machine_info.config(text='\n'.join(lines))
+        else:
+            self.machine_info.config(text=t('ui.machine_none'))
+        
+        # Force le rendu immediat (au cas ou)
+        self.machine_info.update_idletasks()
     
     def _update_session_info(self):
         summary = self.logger.session_summary()
@@ -644,6 +680,21 @@ class OperatorApp:
         self._set_step(0, t('workflow.ready_title').split('— ')[-1])
         self._set_instructions(t('workflow.ready_instructions'))
         self._set_action_btn(t('workflow.start_machine'), self.action_main)
+    
+    def _start_machine_info_poller(self):
+        """Lance un poll Tk qui rafraichit le panneau 'Machine en cours'
+        toutes les 2 secondes, dans le thread Tk principal.
+        
+        Filet de securite si on a oublie un appel a _update_machine_info()
+        quelque part dans le code, ou si Tk a ignore un update venant
+        d'un thread worker.
+        """
+        try:
+            self._update_machine_info()
+        except Exception:
+            pass
+        # Schedule le prochain poll
+        self.root.after(2000, self._start_machine_info_poller)
     
     def action_main(self):
         actions = {
@@ -678,7 +729,7 @@ class OperatorApp:
             self._log(t('workflow.chip_detected',
                         vendor=chip['vendor'], name=chip['name'],
                         size=chip['size_kb']), 'success')
-            self._update_machine_info()
+            self.root.after(0, lambda: self._update_machine_info())
             
             self.root.after(0, lambda: self._set_instructions(
                 t('workflow.chip_detected_instructions',
@@ -808,7 +859,7 @@ class OperatorApp:
             self._log(t('workflow.md5_stock', md5=self.machine_data['stock_md5']), 'dim')
             self._log(t('workflow.saved_at', path=final_stock_path), 'dim')
             
-            self.root.after(0, self._update_machine_info)
+            self.root.after(0, lambda: self._update_machine_info())
             self.root.after(0, lambda: self._set_instructions(
                 t('workflow.dump_saved_instructions', sn=sn)
             ))
@@ -822,11 +873,21 @@ class OperatorApp:
             self.root.after(0, self._hide_operation)
             self.root.after(0, lambda: messagebox.showerror(
                 t('err.read_failed_title'), str(e)))
-            self.root.after(0, lambda: self.action_btn.config(state='normal'))
+            # On force le retour a l'etape 1 (chip detect OK) et on propose
+            # un bouton de retry explicite pour relancer la lecture.
+            self.current_step = 1
+            self.root.after(0, lambda: self._set_instructions(
+                t('workflow.retry_instructions')))
+            self.root.after(0, lambda: self._set_action_btn(
+                t('workflow.retry_read_btn'), self.action_main, C['warning']))
         except Exception as e:
             self._log(f"❌ {e}", 'error')
             self.root.after(0, self._hide_operation)
-            self.root.after(0, lambda: self.action_btn.config(state='normal'))
+            self.current_step = 1
+            self.root.after(0, lambda: self._set_instructions(
+                t('workflow.retry_instructions')))
+            self.root.after(0, lambda: self._set_action_btn(
+                t('workflow.retry_read_btn'), self.action_main, C['warning']))
     
     # ════ STEP 3 ════════════════════════════════════════════════
     def step3_patch(self):
@@ -873,6 +934,7 @@ class OperatorApp:
             self._log(t('workflow.md5_patched', md5=self.machine_data['patched_md5']), 'dim')
             self.root.after(0, lambda: self._update_operation(100, t('op.finished')))
             self.root.after(800, self._hide_operation)
+            self.root.after(0, lambda: self._update_machine_info())
             
             self.root.after(0, lambda: self._set_instructions(
                 t('workflow.patched_ready_instructions')
@@ -898,30 +960,20 @@ class OperatorApp:
             def on_progress_cb(percent, status):
                 self.root.after(0, lambda p=percent, s=status: self._update_operation(p, s))
             
+            # ch341prog.write() fait MAINTENANT : erase + write + verify natif.
+            # Le verify natif de ch341prog relit la puce et la compare au
+            # fichier source en memoire. Si ca foire, il imprime "Error while
+            # writing" et on detecte ce signal dans le wrapper.
+            # Plus besoin de faire un verify Python separe — c'est redondant
+            # et ca prend ~2 min de plus pour rien.
             self.ch341prog.write(
                 self.machine_data['patched_path'],
                 on_log=lambda l: self._log(f"  {l}", 'dim'),
                 on_progress=on_progress_cb,
             )
-            self._log(t('workflow.write_done_verifying'), 'dim')
             
-            # VERIFY : on relit la puce et on compare au fichier source
-            self.root.after(0, lambda: self._update_operation(0, t('op.verification')))
-            
-            def on_verify_progress_cb(percent, status):
-                # On reformate le status pour dire "Verif" au lieu de "Lecture"
-                vstatus = status.replace("Lecture :", "Verif :").replace("Read:", "Verify:")
-                self.root.after(0, lambda p=percent, s=vstatus: self._update_operation(p, s))
-            
-            verify_ok = self.ch341prog.verify(
-                self.machine_data['patched_path'],
-                on_log=lambda l: self._log(f"  {l}", 'dim'),
-                on_progress=on_verify_progress_cb,
-            )
-            
-            if not verify_ok:
-                raise Ch341progError(t('err.verify_failed_patched'))
-            
+            # Si on arrive ici, c'est que le verify natif est passe (sinon
+            # le wrapper aurait leve une exception).
             self.machine_data['verify_patched'] = 'OK'
             self._log(t('workflow.write_verified'), 'success')
             self.root.after(0, lambda: self._update_operation(100, t('op.verified')))
@@ -939,7 +991,16 @@ class OperatorApp:
             self.root.after(0, lambda: messagebox.showerror(
                 t('err.write_failed_title'),
                 t('err.write_failed_advice', err=e)))
-            self.root.after(0, lambda: self.action_btn.config(state='normal'))
+            # IMPORTANT : on remet current_step a 3 (= patch fait) pour que
+            # action_main() relance bien step4_write_patched() et pas
+            # step5_wait_bios_sequence(). On ne doit JAMAIS laisser passer
+            # a l'etape suivante apres un echec d'ecriture.
+            self.current_step = 3
+            self.root.after(0, lambda: self._set_instructions(
+                t('workflow.retry_instructions')))
+            self.root.after(0, lambda: self._set_action_btn(
+                t('workflow.retry_write_patched_btn'),
+                self.action_main, C['warning']))
     
     # ════ STEP 5 ════════════════════════════════════════════════
     def step5_wait_bios_sequence(self):
@@ -965,29 +1026,14 @@ class OperatorApp:
             def on_progress_cb(percent, status):
                 self.root.after(0, lambda p=percent, s=status: self._update_operation(p, s))
             
-            # Ecriture du stock avec ch341prog
+            # Ecriture du stock avec ch341prog : erase + write + verify natif.
+            # Si le verify natif foire, le wrapper leve une exception.
+            # Pas besoin de verify Python additionnel.
             self.ch341prog.write(
                 self.machine_data['stock_path'],
                 on_log=lambda l: self._log(f"  {l}", 'dim'),
                 on_progress=on_progress_cb,
             )
-            self._log(t('workflow.restore_done_verifying'), 'dim')
-            
-            # Verify : relit la puce et compare au stock
-            self.root.after(0, lambda: self._update_operation(0, t('op.verification')))
-            
-            def on_verify_progress_cb(percent, status):
-                vstatus = status.replace("Lecture :", "Verif :").replace("Read:", "Verify:")
-                self.root.after(0, lambda p=percent, s=vstatus: self._update_operation(p, s))
-            
-            verify_ok = self.ch341prog.verify(
-                self.machine_data['stock_path'],
-                on_log=lambda l: self._log(f"  {l}", 'dim'),
-                on_progress=on_verify_progress_cb,
-            )
-            
-            if not verify_ok:
-                raise Ch341progError(t('err.verify_failed_restore'))
             
             self.machine_data['verify_restore'] = 'OK'
             self._log(t('workflow.restore_done'), 'success')
@@ -1009,7 +1055,15 @@ class OperatorApp:
             self.root.after(0, lambda: messagebox.showerror(
                 t('err.restore_failed_title'),
                 t('err.restore_failed_advice', err=e)))
-            self.root.after(0, lambda: self.action_btn.config(state='normal'))
+            # On reste a l'etape 5 (= BIOS sequence faite) pour pouvoir
+            # relancer step6_write_restore. On NE doit PAS laisser passer
+            # a step7 tant que le restore n'est pas verifie OK.
+            self.current_step = 5
+            self.root.after(0, lambda: self._set_instructions(
+                t('workflow.retry_instructions')))
+            self.root.after(0, lambda: self._set_action_btn(
+                t('workflow.retry_restore_btn'),
+                self.action_main, C['warning']))
     
     # ════ STEP 7 ════════════════════════════════════════════════
     def step7_finalize(self):

@@ -11,6 +11,8 @@
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)]()
 [![Language](https://img.shields.io/badge/lang-FR%20%7C%20EN-yellow.svg)]()
 
+![T470s UEFI Unlock Operator screenshot](docs/screenshot.png)
+
 ---
 
 🇫🇷 [Documentation Française](#-version-française) — 🇬🇧 [English Documentation](#-english-version)

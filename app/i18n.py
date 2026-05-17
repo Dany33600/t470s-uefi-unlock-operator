@@ -154,6 +154,23 @@ TRANSLATIONS = {
             "Cliquez sur Valider quand testé."
         ),
         'workflow.validate_btn': '🏁  Valider et machine suivante',
+        'workflow.retry_write_patched_btn': '🔁  Réessayer l\'écriture PATCHED',
+        'workflow.retry_restore_btn': '🔁  Réessayer la restauration STOCK',
+        'workflow.retry_read_btn': '🔁  Réessayer la lecture',
+        'workflow.retry_instructions': (
+            "⚠️ L'étape précédente a échoué.\n\n"
+            "Avant de réessayer :\n"
+            "• Vérifiez le clip (alignement, pression, propreté des contacts)\n"
+            "• Vérifiez que les batteries sont bien débranchées\n"
+            "• Vérifiez la connexion USB du CH341A\n\n"
+            "Cliquez sur 'Réessayer' quand vous êtes prêt."
+        ),
+        'workflow.erase_step_log': '🗑️  Effacement de la puce avant écriture...',
+        'workflow.write_step_log': '✍️  Écriture des données sur la puce...',
+        'workflow.erase_status': 'Effacement de la puce... ({sec}s)',
+        'workflow.erase_done_status': 'Effacement terminé',
+        'workflow.verify_native_log': '🔍  Vérification de l\'écriture en cours...',
+        'workflow.verify_native_status': '🔍 Vérification : {mb:.1f} Mo  •  ETA : {eta}s',
         
         # ═══ Erreurs ══════════════════════════════════════════
         'err.read_failed': '❌ Lecture échouée : {err}',
@@ -197,6 +214,11 @@ TRANSLATIONS = {
         ),
         'err.source_not_found': "Fichier source introuvable : {path}",
         'err.ref_not_found': "Fichier de référence introuvable : {path}",
+        'err.erase_failed': (
+            "Effacement de la puce échoué.\n"
+            "Vérifiez le clip et la connexion CH341A.\n\n"
+            "ch341prog output:\n{output}"
+        ),
         'err.verify_failed_patched': (
             "Vérification échouée : la puce ne contient pas exactement les "
             "mêmes données que le fichier patché.\n"
@@ -454,6 +476,23 @@ TRANSLATIONS = {
             "Click Validate once tested."
         ),
         'workflow.validate_btn': '🏁  Validate and next machine',
+        'workflow.retry_write_patched_btn': '🔁  Retry PATCHED write',
+        'workflow.retry_restore_btn': '🔁  Retry STOCK restore',
+        'workflow.retry_read_btn': '🔁  Retry read',
+        'workflow.retry_instructions': (
+            "⚠️ Previous step failed.\n\n"
+            "Before retrying:\n"
+            "• Check the clip (alignment, pressure, contact cleanliness)\n"
+            "• Make sure both batteries are unplugged\n"
+            "• Verify the CH341A USB connection\n\n"
+            "Click 'Retry' when ready."
+        ),
+        'workflow.erase_step_log': '🗑️  Erasing chip before write...',
+        'workflow.write_step_log': '✍️  Writing data to chip...',
+        'workflow.erase_status': 'Erasing chip... ({sec}s)',
+        'workflow.erase_done_status': 'Erase complete',
+        'workflow.verify_native_log': '🔍  Verifying write...',
+        'workflow.verify_native_status': '🔍 Verifying: {mb:.1f} MB  •  ETA: {eta}s',
         
         # ═══ Errors ═══════════════════════════════════════════
         'err.read_failed': '❌ Read failed: {err}',
@@ -497,6 +536,11 @@ TRANSLATIONS = {
         ),
         'err.source_not_found': "Source file not found: {path}",
         'err.ref_not_found': "Reference file not found: {path}",
+        'err.erase_failed': (
+            "Chip erase failed.\n"
+            "Check the clip and CH341A connection.\n\n"
+            "ch341prog output:\n{output}"
+        ),
         'err.verify_failed_patched': (
             "Verification failed: the chip does not contain exactly the same "
             "data as the patched file.\n"
